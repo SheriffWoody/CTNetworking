@@ -33,6 +33,9 @@ NSString * const kCTAPIBaseManagerRequestID = @"kCTAPIBaseManagerRequestID";
 @property (nonatomic, strong, nullable) void (^successBlock)(CTAPIBaseManager *apimanager);
 @property (nonatomic, strong, nullable) void (^failBlock)(CTAPIBaseManager *apimanager);
 
+@property (nonatomic, assign) NSInteger mNeedRetryCount;
+@property (nonatomic, assign) NSInteger mAlreadyRetryCount;
+
 @end
 
 @implementation CTAPIBaseManager
@@ -53,6 +56,8 @@ NSString * const kCTAPIBaseManagerRequestID = @"kCTAPIBaseManagerRequestID";
 
         _memoryCacheSecond = 3 * 60;
         _diskCacheSecond = 3 * 60;
+        
+        _mAlreadyRetryCount = 0;
         
         if ([self conformsToProtocol:@protocol(CTAPIManager)]) {
             self.child = (id <CTAPIManager>)self;
@@ -153,7 +158,8 @@ NSString * const kCTAPIBaseManagerRequestID = @"kCTAPIBaseManagerRequestID";
                 self.isLoading = YES;
                 
                 id <CTServiceProtocol> service = [[CTServiceFactory sharedInstance] serviceWithIdentifier:self.child.serviceIdentifier];
-                NSURLRequest *request = [service requestWithParams:reformedParams methodName:self.child.methodName requestType:self.child.requestType];
+                
+                NSURLRequest *request = [service requestWithParams:reformedParams methodName:self.child.methodName requestType:self.child.requestType timeoutSeconds:[self timeOutSeconds]];
                 request.service = service;
                 [CTLogger logDebugInfoWithRequest:request apiName:self.child.methodName service:service];
                 
@@ -169,6 +175,12 @@ NSString * const kCTAPIBaseManagerRequestID = @"kCTAPIBaseManagerRequestID";
                     }
                     if (response.status == CTURLResponseStatusErrorNoNetwork) {
                         errorType = CTAPIManagerErrorTypeNoNetWork;
+                    }
+                    //失败之后增加service的重连次数  成功之后会保持成功的url
+                    if ([service respondsToSelector:@selector(retryCountWithAlreadyCount:)]) {
+                        self.mNeedRetryCount = [service retryCountWithAlreadyCount:self.mAlreadyRetryCount];
+                    }else{
+                        self.mNeedRetryCount = 0;
                     }
                     [self failedOnCallingAPI:response withErrorType:errorType];
                 }];
@@ -315,19 +327,24 @@ NSString * const kCTAPIBaseManagerRequestID = @"kCTAPIBaseManagerRequestID";
         self.errorMessage = @"网络拥塞";
     }
     
-    // 其他错误
-    dispatch_async(dispatch_get_main_queue(), ^{
-        if ([self.interceptor respondsToSelector:@selector(manager:didReceiveResponse:)]) {
-            [self.interceptor manager:self didReceiveResponse:response];
-        }
-        if ([self beforePerformFailWithResponse:response]) {
-            [self.delegate managerCallAPIDidFailed:self];
-        }
-        if (self.failBlock) {
-            self.failBlock(self);
-        }
-        [self afterPerformFailWithResponse:response];
-    });
+    if (self.mAlreadyRetryCount < self.mNeedRetryCount) {
+        self.mAlreadyRetryCount ++;
+        [self loadData];
+    }else{
+        // 其他错误
+        dispatch_async(dispatch_get_main_queue(), ^{
+            if ([self.interceptor respondsToSelector:@selector(manager:didReceiveResponse:)]) {
+                [self.interceptor manager:self didReceiveResponse:response];
+            }
+            if ([self beforePerformFailWithResponse:response]) {
+                [self.delegate managerCallAPIDidFailed:self];
+            }
+            if (self.failBlock) {
+                self.failBlock(self);
+            }
+            [self afterPerformFailWithResponse:response];
+        });
+    }
 }
 
 #pragma mark - method for interceptor
@@ -461,6 +478,10 @@ NSString * const kCTAPIBaseManagerRequestID = @"kCTAPIBaseManagerRequestID";
         _isLoading = NO;
     }
     return _isLoading;
+}
+
+- (NSTimeInterval)timeOutSeconds{
+    return CTNetworkingTimeoutSeconds;
 }
 
 @end

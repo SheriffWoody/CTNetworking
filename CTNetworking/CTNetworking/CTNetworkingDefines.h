@@ -14,6 +14,8 @@
 @class CTAPIBaseManager;
 @class CTURLResponse;
 
+static NSTimeInterval const CTNetworkingTimeoutSeconds = 30.f;
+
 typedef NS_ENUM (NSUInteger, CTServiceAPIEnvironment){
     CTServiceAPIEnvironmentDevelop,
     CTServiceAPIEnvironmentReleaseCandidate,

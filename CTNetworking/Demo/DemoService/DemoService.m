@@ -15,6 +15,7 @@
 @property (nonatomic, strong) NSString *publicKey;
 @property (nonatomic, strong) NSString *privateKey;
 @property (nonatomic, strong) NSString *baseURL;
+@property (nonatomic, assign) NSInteger mAlreadyRetryCount;
 
 @property (nonatomic, strong) AFHTTPRequestSerializer *httpRequestSerializer;
 
@@ -23,12 +24,13 @@
 @implementation DemoService
 
 #pragma mark - public methods
-- (NSURLRequest *)requestWithParams:(NSDictionary *)params methodName:(NSString *)methodName requestType:(CTAPIManagerRequestType)requestType
+- (NSURLRequest *)requestWithParams:(NSDictionary *)params methodName:(NSString *)methodName requestType:(CTAPIManagerRequestType)requestType timeoutSeconds:(NSTimeInterval)second
 {
     if (requestType == CTAPIManagerRequestTypeGet) {
         NSString *urlString = [NSString stringWithFormat:@"%@/%@", self.baseURL, methodName];
         NSString *tsString = [NSUUID UUID].UUIDString;
         NSString *md5Hash = [[NSString stringWithFormat:@"%@%@%@", tsString, self.privateKey, self.publicKey] CT_MD5];
+        self.httpRequestSerializer.timeoutInterval = second;
         NSMutableURLRequest *request = [self.httpRequestSerializer requestWithMethod:@"GET"
                                                                            URLString:urlString
                                                                           parameters:@{
@@ -48,8 +50,15 @@
     NSMutableDictionary *result = [[NSMutableDictionary alloc] init];
     result[kCTApiProxyValidateResultKeyResponseData] = responseData;
     result[kCTApiProxyValidateResultKeyResponseJSONString] = [[NSString alloc] initWithData:responseData encoding:NSUTF8StringEncoding];
-    result[kCTApiProxyValidateResultKeyResponseJSONObject] = [NSJSONSerialization JSONObjectWithData:responseData options:0 error:NULL];
+    if (responseData) {
+        result[kCTApiProxyValidateResultKeyResponseJSONObject] = [NSJSONSerialization JSONObjectWithData:responseData options:0 error:NULL];
+    }
     return result;
+}
+
+- (NSInteger)retryCountWithAlreadyCount:(NSInteger)alreadyCount{
+    self.mAlreadyRetryCount = alreadyCount;
+    return 3;
 }
 
 #pragma mark - getters and setters
@@ -66,7 +75,11 @@
 - (NSString *)baseURL
 {
     if (self.apiEnvironment == CTServiceAPIEnvironmentRelease) {
-        return @"https://gateway.marvel.com:443/v1";
+        if (self.mAlreadyRetryCount %2 == 0) {
+            return @"https://gateway.marvel.com:443/v1";
+        }else{
+            return @"https://gateway.marvel.com:443/v1";
+        }
     }
     if (self.apiEnvironment == CTServiceAPIEnvironmentDevelop) {
         return @"https://gateway.marvel.com:443/v1";
@@ -90,5 +103,7 @@
     }
     return _httpRequestSerializer;
 }
+
+@synthesize apiEnvironment;
 
 @end

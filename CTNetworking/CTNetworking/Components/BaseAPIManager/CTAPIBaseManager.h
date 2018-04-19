@@ -46,6 +46,8 @@
 - (id _Nullable )fetchDataWithReformer:(id <CTAPIManagerDataReformer> _Nullable)reformer;
 - (void)cleanData;
 
+- (NSTimeInterval)timeOutSeconds;
+
 @end
 
 @interface CTAPIBaseManager (InnerInterceptor)

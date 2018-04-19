@@ -12,7 +12,13 @@
 @protocol CTServiceProtocol <NSObject>
 
 @property (nonatomic, assign)CTServiceAPIEnvironment apiEnvironment;
-- (NSURLRequest *)requestWithParams:(NSDictionary *)params methodName:(NSString *)methodName requestType:(CTAPIManagerRequestType)requestType;
+
+- (NSURLRequest *)requestWithParams:(NSDictionary *)params methodName:(NSString *)methodName requestType:(CTAPIManagerRequestType)requestType timeoutSeconds:(NSTimeInterval)second;
 - (NSDictionary *)resultWithResponseData:(NSData *)responseData response:(NSURLResponse *)response request:(NSURLRequest *)request error:(NSError **)error;
+
+@optional
+
+//每个服务用同一套url重连逻辑
+- (NSInteger)retryCountWithAlreadyCount:(NSInteger)alreadyCount;
 
 @end
